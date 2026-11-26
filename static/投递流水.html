@@ -29,6 +29,7 @@
     </header>
 
 <section class="卷">
+  <p class="说明">投递命运：成功→事件已投递；失败→计入重试，耗尽转死信匣。同业务键重复票在入队口已被幂等占坑拒掉，不会进入本流水。</p>
   <label>事件号</label><input id="事件号" placeholder="EVT-..."/>
   <label><input type="checkbox" id="强制失败"/> 强制失败（测死信）</label>
   <p class="消息" id="消息"></p>

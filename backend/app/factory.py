@@ -4,6 +4,7 @@ from pathlib import Path
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from app import seed
+from app.modules import 事件幂等键
 from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录
 
 _STATIC = Path(__file__).resolve().parent / "static"
@@ -153,6 +154,14 @@ def create_app() -> Flask:
     def api_互证跑():
         return jsonify(互证.跑一次())
 
+    @app.get("/api/幂等凭证")
+    def api_幂等凭证():
+        return jsonify(事件幂等键.凭证列表())
+
+    @app.get("/api/幂等对账")
+    def api_幂等对账():
+        return jsonify(事件幂等键.对账())
+
     @app.get("/api/夹具")
     def api_夹具():
         return jsonify(夹具.列表())
@@ -161,12 +170,16 @@ def create_app() -> Flask:
     def api_夹具入队(name):
         try:
             体 = 夹具.读取(name)
-            out = [入队.建事件(item) for item in 体.get("事件", [])]
-            return jsonify({"入队": out})
         except FileNotFoundError:
             return jsonify({"错误": name}), 404
-        except ValueError as e:
-            return jsonify({"错误": str(e)}), 400
+        out = []
+        for item in 体.get("事件", []):
+            try:
+                out.append(入队.建事件(item))
+            except ValueError as e:
+                out.append({"事件号": str(item.get("事件号") or ""), "业务键": str(item.get("业务键") or ""),
+                            "状态": "已拒", "错误": str(e)})
+        return jsonify({"入队": out})
 
     @app.get("/api/空桩")
     def api_空桩():

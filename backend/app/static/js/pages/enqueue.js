@@ -1,12 +1,12 @@
 /** 投递台页面模块：accept · 事件队列
- * 建事件写库，状态待投
+ * 按业务键幂等占坑后建事件写库，状态待投；同业务键重复回刷已拒。
  * 真实页面在 backend/app/static；本模块提供状态文案与表格辅助。
  */
 export const PAGE = 'accept';
 export const TITLE = '事件队列';
 
 export const STAGE_COPY = {
-  accept: '受理：建事件写库，状态待投',
+  accept: '受理：按业务键幂等占坑，建事件写库，状态待投',
   dispatch: '投递：占通道端点，事件转投递中',
   receipt: '死信：现场载荷摘要写库，事件转待确认',
   verify: '互证：通过关闭，作废按签名规回流',
@@ -92,7 +92,7 @@ export function mutualAlignHint(aligned) {
 }
 
 export function buildNavCopy() {
-  return '事件队列：建事件写库，状态待投';
+  return '事件队列：按业务键幂等占坑，建事件写库，状态待投';
 }
 
 export function tableHeaders(kind) {

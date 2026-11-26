@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from app.db import 连接
+from app.modules import 事件幂等键
 
 建表 = """
 CREATE TABLE IF NOT EXISTS 用户 (
@@ -21,6 +22,7 @@ CREATE TABLE IF NOT EXISTS 投递端点 (
 );
 CREATE TABLE IF NOT EXISTS 事件 (
   事件号 TEXT PRIMARY KEY,
+  业务键 TEXT NOT NULL DEFAULT '',
   事件类型 TEXT NOT NULL,
   端点键 TEXT NOT NULL DEFAULT '',
   载荷摘要 TEXT NOT NULL DEFAULT '',
@@ -78,6 +80,12 @@ def 此刻() -> str:
 def 初始化库() -> None:
     conn = 连接()
     conn.executescript(建表)
+    事件幂等键.初始化(conn)  # 独立凭证表：按业务键占坑
+    # 存量库迁移：事件表补业务键列
+    列 = [r["name"] for r in conn.execute("PRAGMA table_info(事件)").fetchall()]
+    if "业务键" not in 列:
+        conn.execute("ALTER TABLE 事件 ADD COLUMN 业务键 TEXT NOT NULL DEFAULT ''")
+    conn.execute("UPDATE 事件 SET 业务键=事件号 WHERE 业务键=''")
     if conn.execute("SELECT COUNT(*) AS c FROM 用户").fetchone()["c"] == 0:
         conn.execute("INSERT INTO 用户(账号,密码哈希,角色) VALUES (?,?,?)", ("admin", "123456", "管理员"))
     if conn.execute("SELECT COUNT(*) AS c FROM 签名规").fetchone()["c"] == 0:
@@ -87,8 +95,12 @@ def 初始化库() -> None:
             "主链": "端点登记→事件入队→签名投递→失败重试与死信→投递账互证",
             "签名算法": "HMAC-SHA256",
             "超时秒": "5",
+            "幂等口径": "同业务键仅首票入队，重复回刷已拒；占坑与写入同成败",
         }.items():
             conn.execute("INSERT INTO 签名规(键,值) VALUES (?,?)", (k, v))
+    conn.execute(
+        "INSERT OR IGNORE INTO 签名规(键,值) VALUES ('幂等口径','同业务键仅首票入队，重复回刷已拒；占坑与写入同成败')"
+    )
     if conn.execute("SELECT COUNT(*) AS c FROM 投递端点").fetchone()["c"] == 0:
         for row in [
             ("ep-billing", "账单回调", "https://example.local/hooks/billing", "v1", 1, "账务"),
@@ -126,5 +138,11 @@ def 初始化库() -> None:
             "INSERT INTO 操作留痕(时刻,操作,事件号,详情) VALUES (?,?,?,?)",
             (t, "种子", "", "初始化投递台样例"),
         )
+    # 存量事件回填占坑凭证：业务键=事件号，一事件一凭证
+    conn.execute("UPDATE 事件 SET 业务键=事件号 WHERE 业务键=''")
+    conn.execute(
+        "INSERT OR IGNORE INTO 幂等凭证(业务键,事件号,占坑态,重复回刷数,说明,占坑时) "
+        "SELECT 业务键,事件号,'已占坑',0,'存量回填',入队时 FROM 事件"
+    )
     conn.commit()
     conn.close()

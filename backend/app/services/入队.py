@@ -1,6 +1,7 @@
 from __future__ import annotations
 import uuid
 from app.db import 连接
+from app.modules import 事件幂等键
 from app.services import 校验
 from app.services.时间 import 此刻
 
@@ -11,6 +12,7 @@ def 建事件(body: dict) -> dict:
     摘要 = str(body.get("载荷摘要") or "")
     优先级 = str(body.get("优先级") or "普通")
     事件号 = str(body.get("事件号") or f"EVT-{uuid.uuid4().hex[:10]}")
+    业务键 = str(body.get("业务键") or "").strip() or 事件号
     t = 此刻()
     conn = 连接()
     try:
@@ -21,12 +23,14 @@ def 建事件(body: dict) -> dict:
             raise ValueError("端点已停用，拒绝入队")
         if conn.execute("SELECT 1 FROM 事件 WHERE 事件号=?", (事件号,)).fetchone():
             raise ValueError("事件号已存在")
+        # 幂等占坑与事件写入同一事务，同成败；同业务键第二票在此被拒
+        事件幂等键.占坑(conn, 业务键, 事件号)
         conn.execute(
-            "INSERT INTO 事件(事件号,事件类型,端点键,载荷摘要,优先级,状态,入队时,更新时) VALUES (?,?,?,?,?,?,?,?)",
-            (事件号, 类型, 端点键, 摘要, 优先级, "待投", t, t),
+            "INSERT INTO 事件(事件号,业务键,事件类型,端点键,载荷摘要,优先级,状态,入队时,更新时) VALUES (?,?,?,?,?,?,?,?,?)",
+            (事件号, 业务键, 类型, 端点键, 摘要, 优先级, "待投", t, t),
         )
         conn.execute("INSERT INTO 操作留痕(时刻,操作,事件号,详情) VALUES (?,?,?,?)",
-                     (t, "入队", 事件号, 类型))
+                     (t, "入队", 事件号, f"{类型}·业务键{业务键}·已占坑"))
         conn.commit()
         return dict(conn.execute("SELECT * FROM 事件 WHERE 事件号=?", (事件号,)).fetchone())
     finally:

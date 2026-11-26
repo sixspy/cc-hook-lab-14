@@ -29,8 +29,20 @@
     </header>
 
 <section class="卷"><div class="指标" id="指标"></div></section>
-<section class="卷"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></section>
-<section class="卷"><p class="说明" id="主链"></p><button class="按钮" type="button" id="互证钮">跑投递互证</button><pre id="互证出" class="说明"></pre></section>
+<section class="卷">
+  <p class="说明">事件命运：待投→投递中→已投递／死信；同业务键仅首票入队，重复回刷已拒（幂等占坑）。</p>
+  <p class="说明" id="主链"></p>
+  <p class="说明">可点主链：
+    <a href="/端点名册.html">端点登记</a> →
+    <a href="/事件队列.html">事件入队</a> →
+    <a href="/投递流水.html">签名投递</a> →
+    <a href="/投递流水.html">失败重试</a> →
+    <a href="/死信匣.html">死信</a> →
+    <a href="/投递互证.html">投递账互证</a>
+  </p>
+</section>
+<section class="卷"><table><thead><tr><th>事件号</th><th>业务键</th><th>事件类型</th><th>端点键</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></section>
+<section class="卷"><button class="按钮" type="button" id="互证钮">跑投递互证</button><pre id="互证出" class="说明"></pre></section>
 
   </main>
 
@@ -49,8 +61,8 @@
   const rows = await 投递台.getJSON('/api/事件');
   const tb = document.getElementById('表');
   for (const r of rows.slice(0,12)) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td></td>');
-    tr.children[3].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
+    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.业务键)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td></td>');
+    tr.children[4].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
   }
   document.getElementById('互证钮').onclick = async () => {
     document.getElementById('互证出').textContent = JSON.stringify(await 投递台.postJSON('/api/互证/跑',{}), null, 2);

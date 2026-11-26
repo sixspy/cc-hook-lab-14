@@ -43,6 +43,8 @@ def 概览() -> dict:
             "死信": c("SELECT COUNT(*) FROM 事件 WHERE 状态='死信'"),
             "尝试数": c("SELECT COUNT(*) FROM 投递尝试"),
             "死信匣": c("SELECT COUNT(*) FROM 死信 WHERE 状态='待处置'"),
+            "幂等凭证": c("SELECT COUNT(*) FROM 幂等凭证"),
+            "重复回刷已拒": c("SELECT COALESCE(SUM(重复回刷数),0) FROM 幂等凭证"),
             "签名规": 签名规(),
         }
     finally:
@@ -52,7 +54,11 @@ def 概览() -> dict:
 def 事件列表() -> list:
     conn = 连接()
     try:
-        return [dict(r) for r in conn.execute("SELECT * FROM 事件 ORDER BY 入队时 DESC").fetchall()]
+        # 正式集合只读事件表（首票集），不联凭证表、不混对账影子
+        rows = [dict(r) for r in conn.execute("SELECT * FROM 事件 ORDER BY 入队时 DESC").fetchall()]
+        for d in rows:
+            d["占坑态"] = "已占坑·首票"
+        return rows
     finally:
         conn.close()
 
@@ -64,6 +70,9 @@ def 事件一条(事件号: str) -> dict | None:
         if not row:
             return None
         d = dict(row)
+        d["占坑态"] = "已占坑·首票"  # 队列与详情同票：同一事件行
+        z = conn.execute("SELECT * FROM 幂等凭证 WHERE 业务键=?", (d.get("业务键") or "",)).fetchone()
+        d["凭证"] = dict(z) if z else None
         d["尝试"] = [dict(x) for x in conn.execute(
             "SELECT * FROM 投递尝试 WHERE 事件号=? ORDER BY 投递时 DESC", (事件号,)
         ).fetchall()]
